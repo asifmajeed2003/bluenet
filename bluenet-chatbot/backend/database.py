@@ -27,8 +27,17 @@ def create_table(conn):
             location text
         );
         """
+        sql_transcriptions = """
+        CREATE TABLE IF NOT EXISTS transcriptions (
+            id integer PRIMARY KEY,
+            audio_file_path text NOT NULL,
+            transcription_text text NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """
         conn.execute(sql_articles)
         conn.execute(sql_users)
+        conn.execute(sql_transcriptions)
     except sqlite3.Error as e:
         print(e)
 

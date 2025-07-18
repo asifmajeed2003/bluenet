@@ -1,11 +1,10 @@
 from flask import Flask, request, jsonify
-import requests
-import json
 import sqlite3
 import feedparser
 from PIL import Image
 import io
 import polyline
+from openai import OpenAI
 
 app = Flask(__name__)
 
@@ -26,21 +25,26 @@ def translate_text(text, target_language):
     """
     return text
 
-# --- Rasa Integration ---
-def get_rasa_intent(message):
+# --- OpenRouter Integration ---
+def get_openrouter_response(message):
     """
-    This function sends a message to the Rasa server and returns the intent.
+    This function sends a message to the OpenRouter API and returns the response.
     """
-    rasa_url = "http://localhost:5005/model/parse"
-    payload = {"text": message}
-    headers = {"Content-Type": "application/json"}
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key="YOUR_OPENROUTER_API_KEY", # Please replace with your API key
+    )
     try:
-        response = requests.post(rasa_url, data=json.dumps(payload), headers=headers)
-        if response.status_code == 200:
-            return response.json()
-    except requests.exceptions.ConnectionError as e:
-        print(f"Connection error: {e}")
-    return None
+        response = client.chat.completions.create(
+            model="deepseek/deepseek-r1",
+            messages=[
+                {"role": "user", "content": message},
+            ],
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
 
 # --- Endpoints ---
 @app.route('/chat', methods=['POST'])
@@ -50,24 +54,10 @@ def chat():
         return jsonify({"error": "No message provided"}), 400
 
     translated_message = translate_text(user_message, "en")
-    rasa_response = get_rasa_intent(translated_message)
+    openrouter_response = get_openrouter_response(translated_message)
 
-    if rasa_response and "intent" in rasa_response:
-        intent = rasa_response.get("intent", {}).get("name")
-        if intent == "ask_faq":
-            # Search the knowledge base for an answer
-            conn = db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM articles WHERE title LIKE ?", ('%' + translated_message + '%',))
-            articles = cursor.fetchall()
-            conn.close()
-            if articles:
-                response_text = articles[0][2] # return the content of the first article
-            else:
-                response_text = "Sorry, I don't have an answer for that."
-        else:
-            # For other intents, just return the intent name
-            response_text = f"I received your message with intent: {intent}"
+    if openrouter_response:
+        response_text = openrouter_response
     else:
         response_text = "Sorry, I could not understand your message."
 
