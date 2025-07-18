@@ -15,6 +15,8 @@ async function sendMessage() {
         appendMessage('user', userMessage);
         userInput.value = '';
 
+        showTypingIndicator();
+
         const response = await fetch('http://localhost:5000/chat', {
             method: 'POST',
             headers: {
@@ -22,6 +24,8 @@ async function sendMessage() {
             },
             body: JSON.stringify({ message: userMessage })
         });
+
+        hideTypingIndicator();
 
         if (response.ok) {
             const data = await response.json();
@@ -38,4 +42,19 @@ function appendMessage(sender, message) {
     messageElement.innerText = message;
     chatBox.appendChild(messageElement);
     chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function showTypingIndicator() {
+    const typingIndicator = document.createElement('div');
+    typingIndicator.classList.add('message', 'bot-message', 'typing-indicator');
+    typingIndicator.innerHTML = '<span></span><span></span><span></span>';
+    chatBox.appendChild(typingIndicator);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    const typingIndicator = document.querySelector('.typing-indicator');
+    if (typingIndicator) {
+        typingIndicator.remove();
+    }
 }
