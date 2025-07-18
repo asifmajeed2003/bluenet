@@ -1,0 +1,7 @@
+Flask
+rasa==2.8.1
+rasa-sdk==2.8.1
+protobuf==3.20.0
+feedparser
+Pillow
+polyline
