@@ -9,3 +9,6 @@ Flask-Cors==4.0.0
 requests==2.32.3
 openrouteservice==2.3.0
 setuptools==65.5.0
+transformers==4.38.2
+torch==2.2.1
+sentencepiece==0.1.99

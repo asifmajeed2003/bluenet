@@ -10,9 +10,15 @@ import requests
 import openrouteservice
 from google.cloud import speech
 from google.cloud import texttospeech
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import torch
 
 app = Flask(__name__)
 CORS(app)
+
+# --- IndicTrans 2.0 Setup ---
+tokenizer = AutoTokenizer.from_pretrained("ai4bharat/indictrans2-en-indic-1B", trust_remote_code=True)
+model = AutoModelForSeq2SeqLM.from_pretrained("ai4bharat/indictrans2-en-indic-1B", trust_remote_code=True)
 
 # --- Database Functions ---
 def db_connection():
@@ -23,7 +29,7 @@ def db_connection():
         print(e)
     return conn
 
-# --- Bhashini API Placeholder ---
+# --- Language Detection Placeholder ---
 def detect_language(text):
     """
     This is a placeholder function for language detection.
@@ -32,13 +38,42 @@ def detect_language(text):
     # In a real application, you would use a language detection library or API
     return "en"
 
+# --- IndicTrans 2.0 Translation ---
 def translate_text(text, source_language, target_language):
     """
-    This is a placeholder function for the Bhashini API.
-    It currently does not perform any translation.
+    This function translates text using the IndicTrans 2.0 model.
     """
-    # In a real application, you would call the Bhashini API here
-    return f"Translated from {source_language} to {target_language}: {text}"
+    if source_language == target_language:
+        return text
+
+    # IndicTrans2 uses specific language codes
+    lang_map = {
+        "en": "eng_Latn",
+        "hi": "hin_Deva",
+        "ta": "tam_Taml",
+        "te": "tel_Telu",
+        "kn": "kan_Knda",
+        "ml": "mal_Mlym",
+    }
+
+    src_lang_code = lang_map.get(source_language)
+    tgt_lang_code = lang_map.get(target_language)
+
+    if not src_lang_code or not tgt_lang_code:
+        return text # Return original text if language is not supported
+
+    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+
+    with torch.no_grad():
+        generated_tokens = model.generate(
+            **inputs,
+            forced_bos_token_id=tokenizer.lang_code_to_id[tgt_lang_code],
+            num_return_sequences=1,
+            max_length=1024
+        )
+
+    decoded_tokens = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+    return decoded_tokens[0]
 
 # --- OpenRouter Integration ---
 def get_openrouter_response(message, history=[]):
