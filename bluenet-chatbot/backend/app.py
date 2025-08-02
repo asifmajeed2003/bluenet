@@ -1,45 +1,67 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import sqlite3
 import feedparser
 from PIL import Image
 import io
 import polyline
 from openai import OpenAI
+import requests
+import openrouteservice
+from google.cloud import speech
+from google.cloud import texttospeech
 
 app = Flask(__name__)
+CORS(app)
 
 # --- Database Functions ---
 def db_connection():
     conn = None
     try:
-        conn = sqlite3.connect("knowledge_base.db")
+        conn = sqlite3.connect("bluenet.db")
     except sqlite3.error as e:
         print(e)
     return conn
 
 # --- Bhashini API Placeholder ---
-def translate_text(text, target_language):
+def detect_language(text):
+    """
+    This is a placeholder function for language detection.
+    It currently returns 'en' for all inputs.
+    """
+    # In a real application, you would use a language detection library or API
+    return "en"
+
+def translate_text(text, source_language, target_language):
     """
     This is a placeholder function for the Bhashini API.
     It currently does not perform any translation.
     """
-    return text
+    # In a real application, you would call the Bhashini API here
+    return f"Translated from {source_language} to {target_language}: {text}"
 
 # --- OpenRouter Integration ---
-def get_openrouter_response(message):
+def get_openrouter_response(message, history=[]):
     """
     This function sends a message to the OpenRouter API and returns the response.
     """
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key="YOUR_OPENROUTER_API_KEY", # Please replace with your API key
+        api_key="YOUR_OPENROUTER_API_KEY",  # Please replace with your API key
     )
     try:
+        messages = [
+            {
+                "role": "system",
+                "content": "You are Bluenet, a helpful assistant for Indian coastal fishing communities. You provide information on regulations, safety, and weather. You are friendly and speak in simple terms.",
+            }
+        ]
+        messages.extend(history)
+        messages.append({"role": "user", "content": message})
+
         response = client.chat.completions.create(
             model="deepseek/deepseek-r1",
-            messages=[
-                {"role": "user", "content": message},
-            ],
+            messages=messages,
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -50,18 +72,33 @@ def get_openrouter_response(message):
 @app.route('/chat', methods=['POST'])
 def chat():
     user_message = request.json.get('message')
+    history = request.json.get('history', [])
     if not user_message:
         return jsonify({"error": "No message provided"}), 400
 
-    translated_message = translate_text(user_message, "en")
-    openrouter_response = get_openrouter_response(translated_message)
+    source_language = detect_language(user_message)
+    translated_message = translate_text(user_message, source_language, "en")
+
+    openrouter_response = get_openrouter_response(translated_message, history)
 
     if openrouter_response:
-        response_text = openrouter_response
+        response_text = translate_text(openrouter_response, "en", source_language)
     else:
         response_text = "Sorry, I could not understand your message."
 
     return jsonify({"response": response_text})
+
+@app.route('/translate', methods=['POST'])
+def translate():
+    text = request.json.get('text')
+    source_language = request.json.get('source_language')
+    target_language = request.json.get('target_language')
+
+    if not text or not source_language or not target_language:
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    translated_text = translate_text(text, source_language, target_language)
+    return jsonify({"translated_text": translated_text})
 
 @app.route('/kb', methods=['GET', 'POST'])
 def kb():
@@ -69,7 +106,13 @@ def kb():
     cursor = conn.cursor()
 
     if request.method == 'GET':
-        cursor.execute("SELECT * FROM articles")
+        query = request.args.get('q')
+        if query:
+            cursor.execute("SELECT * FROM articles WHERE title LIKE ? OR content LIKE ?",
+                           ('%' + query + '%', '%' + query + '%'))
+        else:
+            cursor.execute("SELECT * FROM articles")
+
         articles = [
             dict(id=row[0], title=row[1], content=row[2], language=row[3])
             for row in cursor.fetchall()
@@ -89,17 +132,20 @@ def kb():
 
 @app.route('/alerts', methods=['GET'])
 def alerts():
-    # Placeholder for IMD RSS feed
-    rss_url = "https://alerts.weather.gov/cap/us.php?x=1" # Using a sample RSS feed for now
-    feed = feedparser.parse(rss_url)
-    alerts = []
-    for entry in feed.entries:
-        alerts.append({
-            "title": entry.title,
-            "summary": entry.summary,
-            "link": entry.link
-        })
-    return jsonify(alerts)
+    location = request.args.get('location', 'Chennai')  # Default location is Chennai
+    api_key = "YOUR_WEATHERAPI_KEY"  # Please replace with your API key
+    url = f"http://api.weatherapi.com/v1/forecast.json?key={api_key}&q={location}&days=1&aqi=no&alerts=yes"
+
+    try:
+        response = requests.get(url)
+        data = response.json()
+        if "error" in data:
+            return jsonify({"error": data["error"]["message"]}), 400
+
+        alerts = data.get("alerts", {}).get("alert", [])
+        return jsonify(alerts)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/recognize', methods=['POST'])
 def recognize():
@@ -109,28 +155,38 @@ def recognize():
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     if file:
-        # Placeholder for fish identification
-        # For now, we will just return a dummy prediction
+        api_key = "YOUR_FISHIAL_API_KEY"  # Please replace with your API key
+        url = "https://fishial.ai/api/v1/recognition"
+
         try:
-            img = Image.open(io.BytesIO(file.read()))
-            # In a real application, you would send the image to a fish identification API
-            prediction = "This is a dummy prediction. The fish is a... Clownfish!"
-            return jsonify({"prediction": prediction})
+            files = {'image': file.read()}
+            headers = {'Authorization': f'Bearer {api_key}'}
+            response = requests.post(url, files=files, headers=headers)
+            data = response.json()
+            return jsonify(data)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
 @app.route('/navigate', methods=['POST'])
 def navigate():
-    # Placeholder for navigation
-    # In a real application, you would use a mapping service to get the route
-    # For now, we will just return a dummy route
-    # The route is encoded using polyline encoding
-    route = [
-        (12.9716, 77.5946), # Bangalore
-        (13.0827, 80.2707)  # Chennai
-    ]
-    encoded_route = polyline.encode(route)
-    return jsonify({"route": encoded_route})
+    api_key = "YOUR_ORS_API_KEY"  # Please replace with your API key
+    client = openrouteservice.Client(key=api_key)
+
+    start_coords = request.json.get('start')
+    end_coords = request.json.get('end')
+
+    if not start_coords or not end_coords:
+        return jsonify({"error": "Start and end coordinates are required"}), 400
+
+    try:
+        routes = client.directions(
+            coordinates=[start_coords, end_coords],
+            profile='driving-car',
+            format='json'
+        )
+        return jsonify(routes)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/users', methods=['GET', 'POST'])
 def users():
@@ -156,32 +212,52 @@ def users():
         conn.commit()
         return f"User with id: {cursor.lastrowid} created successfully", 201
 
-if __name__ == '__main__':
-    # create a database connection
-    conn = db_connection()
-    # create table if it doesn't exist
-    if conn is not None:
-        sql_create_articles_table = """ CREATE TABLE IF NOT EXISTS articles (
-                                        id integer PRIMARY KEY,
-                                        title text NOT NULL,
-                                        content text NOT NULL,
-                                        language text NOT NULL
-                                    ); """
-        sql_create_users_table = """CREATE TABLE IF NOT EXISTS users (
-            id integer PRIMARY KEY,
-            fisher_id text UNIQUE,
-            language text,
-            location text
-        );
-        """
+@app.route('/speech-to-text', methods=['POST'])
+def speech_to_text():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No file selected"}), 400
+    if file:
+        client = speech.SpeechClient()
+        audio = speech.RecognitionAudio(content=file.read())
+        config = speech.RecognitionConfig(
+            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=16000,
+            language_code="en-US",
+        )
         try:
-            c = conn.cursor()
-            c.execute(sql_create_articles_table)
-            c.execute(sql_create_users_table)
-        except sqlite3.Error as e:
-            print(e)
-        conn.close()
-    else:
-        print("Error! cannot create the database connection.")
+            response = client.recognize(config=config, audio=audio)
+            transcript = ""
+            for result in response.results:
+                transcript += result.alternatives[0].transcript
+            return jsonify({"transcript": transcript})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
+@app.route('/text-to-speech', methods=['POST'])
+def text_to_speech():
+    text = request.json.get('text')
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+
+    client = texttospeech.TextToSpeechClient()
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+    voice = texttospeech.VoiceSelectionParams(
+        language_code="en-US", ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+    )
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3
+    )
+
+    try:
+        response = client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
+        )
+        return response.audio_content, 200, {'Content-Type': 'audio/mpeg'}
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
     app.run(debug=True, port=5000)

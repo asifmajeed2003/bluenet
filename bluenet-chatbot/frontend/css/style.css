@@ -28,6 +28,25 @@ body {
     padding: 20px;
     text-align: center;
     border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#theme-switcher {
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+#theme-switcher:hover {
+    transform: scale(1.1);
+}
+
+#theme-switcher img {
+    width: 25px;
+    height: 25px;
 }
 
 .chat-box {
@@ -44,6 +63,18 @@ body {
     margin-bottom: 10px;
     max-width: 80%;
     word-wrap: break-word;
+    animation: slideIn 0.5s ease-in-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .user-message {
@@ -127,4 +158,43 @@ body {
     60% {
         transform: translateY(-5px);
     }
+}
+
+/* Dark Mode */
+body.dark-mode {
+    background: linear-gradient(to right, #434343, #000000);
+}
+
+.dark-mode .chat-container {
+    background-color: #333;
+}
+
+.dark-mode .chat-header {
+    background-color: #222;
+    color: #fff;
+    border-bottom: 1px solid #444;
+}
+
+.dark-mode .chat-box {
+    background-color: #333;
+}
+
+.dark-mode .user-message {
+    background-color: #007bff;
+}
+
+.dark-mode .bot-message {
+    background-color: #555;
+    color: #fff;
+}
+
+.dark-mode #user-input {
+    background-color: #555;
+    color: #fff;
+}
+
+.dark-mode #send-btn img,
+.dark-mode #mic-btn img,
+.dark-mode #theme-switcher img {
+    filter: invert(1);
 }

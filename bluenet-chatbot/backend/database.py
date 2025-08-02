@@ -3,8 +3,8 @@ import sqlite3
 def create_connection():
     conn = None
     try:
-        conn = sqlite3.connect('knowledge_base.db')
-        print(sqlite3.version)
+        conn = sqlite3.connect('bluenet.db')
+        print(f"Connected to bluenet.db, SQLite version: {sqlite3.version}")
     except sqlite3.Error as e:
         print(e)
     return conn
