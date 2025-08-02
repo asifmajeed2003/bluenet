@@ -1,167 +1,209 @@
-const chatBox = document.querySelector('.chat-box');
+import { users } from './database.js';
+import { translations, guideSteps } from './translations.js';
+
+// --- DOM Elements ---
+const splashScreen = document.getElementById('splash-screen');
+const languageSelectionScreen = document.getElementById('language-selection-screen');
+const languageSelector = document.getElementById('language-selector');
+const languageSubmitBtn = document.getElementById('language-submit-btn');
+const loginModal = document.getElementById('login-modal');
+const mainChatContainer = document.getElementById('main-chat-container');
+const modalTitle = document.getElementById('modal-title');
+const modalMessage = document.getElementById('modal-message');
+const signupFields = document.getElementById('signup-fields');
+const firstNameInput = document.getElementById('first-name-input');
+const lastNameInput = document.getElementById('last-name-input');
+const fisherIdInput = document.getElementById('fisher-id-input');
+const phoneInput = document.getElementById('phone-input');
+const authActionBtn = document.getElementById('auth-action-btn');
+const switchToSignupLink = document.querySelector('.form-switcher');
+const profileContainer = document.getElementById('profile-container');
+const profileIcon = document.getElementById('profile-icon');
+const logoutDropdown = document.getElementById('logout-dropdown');
+const welcomeMessage = document.getElementById('welcome-message');
+const logoutBtn = document.getElementById('logout-btn');
+const visualGuideBtn = document.getElementById('visual-guide-btn');
+const guideModal = document.getElementById('guide-modal');
+const closeGuideBtn = document.getElementById('close-guide-btn');
+const guideTitle = document.getElementById('guide-title');
+const guideStepsContainer = document.getElementById('guide-steps');
+
+let isLoginMode = true;
+let currentLanguage = 'en';
+
+// --- Initial Setup ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Start with splash screen
+    setTimeout(() => {
+        splashScreen.classList.add('hidden');
+        languageSelectionScreen.classList.remove('hidden');
+    }, 3000);
+
+    loadTheme();
+});
+
+// --- Language Selection ---
+languageSubmitBtn.addEventListener('click', () => {
+    currentLanguage = languageSelector.value;
+    languageSelectionScreen.classList.add('hidden');
+    updateUIText();
+    checkLoginStatus();
+});
+
+// --- Authentication Flow ---
+function checkLoginStatus() {
+    const loggedInUser = JSON.parse(sessionStorage.getItem('loggedInUser'));
+    if (loggedInUser) {
+        showChatView(loggedInUser);
+    } else {
+        showLoginView();
+    }
+}
+
+function showChatView(user) {
+    mainChatContainer.classList.remove('hidden');
+    loginModal.classList.add('hidden');
+    profileContainer.classList.remove('hidden');
+    welcomeMessage.textContent = `${translations[currentLanguage].welcome}, ${user.firstName}!`;
+}
+
+function showLoginView() {
+    mainChatContainer.classList.add('hidden');
+    loginModal.classList.remove('hidden');
+    profileContainer.classList.add('hidden');
+}
+
+// --- Event Listeners ---
+profileIcon.addEventListener('click', () => {
+    logoutDropdown.classList.toggle('hidden');
+});
+
+logoutBtn.addEventListener('click', () => {
+    sessionStorage.removeItem('loggedInUser');
+    logoutDropdown.classList.add('hidden');
+    checkLoginStatus();
+});
+
+loginModal.addEventListener('click', (e) => {
+    if (e.target === loginModal) loginModal.classList.add('hidden');
+});
+
+switchToSignupLink.addEventListener('click', (e) => {
+    if (e.target.tagName === 'A') {
+        e.preventDefault();
+        isLoginMode = !isLoginMode;
+        updateAuthForm();
+    }
+});
+
+authActionBtn.addEventListener('click', handleAuthAction);
+visualGuideBtn.addEventListener('click', showVisualGuide);
+closeGuideBtn.addEventListener('click', () => guideModal.classList.add('hidden'));
+
+// --- Functions ---
+function updateAuthForm() {
+    signupFields.classList.toggle('hidden', isLoginMode);
+    updateUIText();
+}
+
+function handleAuthAction() {
+    const fisherId = fisherIdInput.value.trim();
+    const phone = phoneInput.value.trim();
+    const firstName = firstNameInput.value.trim();
+    const lastName = lastNameInput.value.trim();
+
+    if (!fisherId || !phone || (!isLoginMode && (!firstName || !lastName))) {
+        showModalMessage(translations[currentLanguage].fillAllFields);
+        return;
+    }
+
+    const userExists = users.find(u => u.fisherId === fisherId);
+
+    if (isLoginMode) {
+        if (userExists && userExists.phone === phone) {
+            loginSuccess(userExists);
+        } else {
+            showModalMessage(translations[currentLanguage].invalidCredentials);
+        }
+    } else { // Signup
+        if (userExists) {
+            showModalMessage(translations[currentLanguage].accountExists);
+            setTimeout(() => loginSuccess(userExists), 1500);
+        } else {
+            const newUser = { fisherId, phone, firstName, lastName };
+            users.push(newUser); // Simulate adding to DB
+            showModalMessage(translations[currentLanguage].signupSuccess);
+            setTimeout(() => loginSuccess(newUser), 1500);
+        }
+    }
+}
+
+function loginSuccess(user) {
+    sessionStorage.setItem('loggedInUser', JSON.stringify(user));
+    loginModal.classList.add('hidden');
+    checkLoginStatus();
+    fisherIdInput.value = '';
+    phoneInput.value = '';
+    firstNameInput.value = '';
+    lastNameInput.value = '';
+    modalMessage.classList.add('hidden');
+}
+
+function showModalMessage(message) {
+    modalMessage.textContent = message;
+    modalMessage.classList.remove('hidden');
+}
+
+function showVisualGuide() {
+    guideTitle.textContent = translations[currentLanguage].guideTitle;
+    const steps = guideSteps[currentLanguage];
+    guideStepsContainer.innerHTML = steps.map((step, index) => `<p><b>${index + 1}.</b> ${step}</p>`).join('');
+    guideModal.classList.remove('hidden');
+}
+
+function updateUIText() {
+    const t = translations[currentLanguage];
+    modalTitle.textContent = isLoginMode ? t.login : t.signup;
+    authActionBtn.textContent = isLoginMode ? t.login : t.signup;
+    switchToSignupLink.innerHTML = isLoginMode ? t.signupPrompt : t.loginPrompt;
+    document.getElementById('user-input').placeholder = t.typeMessage;
+    firstNameInput.placeholder = t.firstName;
+    lastNameInput.placeholder = t.lastName;
+    fisherIdInput.placeholder = t.fisherId;
+    phoneInput.placeholder = t.phone;
+}
+
+
+// --- Chat Functionality (Placeholder) ---
+const chatBox = document.getElementById('chat-box');
 const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
-const micBtn = document.getElementById('mic-btn');
+
+sendBtn.addEventListener('click', () => {
+    const message = userInput.value.trim();
+    if (message) {
+        appendMessage('user', message);
+        userInput.value = '';
+    }
+});
+
+function appendMessage(sender, text) {
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message', `${sender}-message`);
+    messageElement.textContent = text;
+    chatBox.appendChild(messageElement);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// --- Theme switcher ---
 const themeSwitcher = document.getElementById('theme-switcher');
-
-let mediaRecorder;
-let audioChunks = [];
-
-// Theme switcher
 themeSwitcher.addEventListener('click', () => {
     document.body.classList.toggle('dark-mode');
-    if (document.body.classList.contains('dark-mode')) {
-        themeSwitcher.firstElementChild.src = "https://img.icons8.com/ios-filled/50/FFFFFF/moon-symbol.png";
-        localStorage.setItem('theme', 'dark-mode');
-    } else {
-        themeSwitcher.firstElementChild.src = "https://img.icons8.com/ios-filled/50/000000/sun.png";
-        localStorage.setItem('theme', 'light-mode');
-    }
+    localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
 });
 
 function loadTheme() {
-    const theme = localStorage.getItem('theme');
-    if (theme === 'dark-mode') {
+    if (localStorage.getItem('theme') === 'dark') {
         document.body.classList.add('dark-mode');
-        themeSwitcher.firstElementChild.src = "https://img.icons8.com/ios-filled/50/FFFFFF/moon-symbol.png";
-    }
-}
-
-loadTheme();
-
-sendBtn.addEventListener('click', () => sendMessage());
-userInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-        sendMessage();
-    }
-});
-
-micBtn.addEventListener('click', () => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-        micBtn.firstElementChild.src = "https://img.icons8.com/ios-filled/50/000000/microphone.png";
-    } else {
-        navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(stream => {
-                mediaRecorder = new MediaRecorder(stream);
-                mediaRecorder.start();
-                micBtn.firstElementChild.src = "https://img.icons8.com/ios-filled/50/FA5252/stop-circled.png";
-
-                mediaRecorder.addEventListener("dataavailable", event => {
-                    audioChunks.push(event.data);
-                });
-
-                mediaRecorder.addEventListener("stop", () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                    sendAudio(audioBlob);
-                    audioChunks = [];
-                });
-            })
-            .catch(error => {
-                console.error("Error accessing microphone:", error);
-                appendMessage('bot', 'Could not access microphone. Please allow microphone access in your browser settings.');
-            });
-    }
-});
-
-async function sendMessage(message) {
-    const userMessage = message || userInput.value;
-    if (userMessage.trim() !== '') {
-        appendMessage('user', userMessage);
-        userInput.value = '';
-
-        showTypingIndicator();
-
-        const response = await fetch('http://localhost:5000/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message: userMessage, history: getChatHistory() })
-        });
-
-        hideTypingIndicator();
-
-        if (response.ok) {
-            const data = await response.json();
-            appendMessage('bot', data.response);
-            playAudio(data.response);
-        } else {
-            appendMessage('bot', 'Sorry, something went wrong.');
-        }
-    }
-}
-
-async function sendAudio(audioBlob) {
-    showTypingIndicator();
-    const formData = new FormData();
-    formData.append('file', audioBlob);
-
-    const response = await fetch('http://localhost:5000/speech-to-text', {
-        method: 'POST',
-        body: formData
-    });
-
-    hideTypingIndicator();
-
-    if (response.ok) {
-        const data = await response.json();
-        if (data.transcript) {
-            sendMessage(data.transcript);
-        } else {
-            appendMessage('bot', 'Sorry, I could not understand what you said.');
-        }
-    } else {
-        appendMessage('bot', 'Sorry, something went wrong with speech recognition.');
-    }
-}
-
-function appendMessage(sender, message) {
-    const messageElement = document.createElement('div');
-    messageElement.classList.add('message', `${sender}-message`);
-    messageElement.innerText = message;
-    chatBox.appendChild(messageElement);
-    chatBox.scrollTop = chatBox.scrollHeight;
-
-    // Store message in history
-    const history = getChatHistory();
-    history.push({role: sender, content: message});
-    sessionStorage.setItem('chatHistory', JSON.stringify(history));
-}
-
-function getChatHistory() {
-    const history = sessionStorage.getItem('chatHistory');
-    return history ? JSON.parse(history) : [];
-}
-
-async function playAudio(text) {
-    const response = await fetch('http://localhost:5000/text-to-speech', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ text: text })
-    });
-
-    if (response.ok) {
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        audio.play();
-    }
-}
-
-function showTypingIndicator() {
-    const typingIndicator = document.createElement('div');
-    typingIndicator.classList.add('message', 'bot-message', 'typing-indicator');
-    typingIndicator.innerHTML = '<span></span><span></span><span></span>';
-    chatBox.appendChild(typingIndicator);
-    chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function hideTypingIndicator() {
-    const typingIndicator = document.querySelector('.typing-indicator');
-    if (typingIndicator) {
-        typingIndicator.remove();
     }
 }
