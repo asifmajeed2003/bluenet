@@ -5,8 +5,6 @@ from dotenv import load_dotenv
 import requests
 import openrouteservice
 from imageai.Detection import ObjectDetection
-
-load_dotenv()
 import os
 import vosk
 import wave
@@ -14,6 +12,10 @@ import json
 from gtts import gTTS
 import io
 import sqlite3
+from langdetect import detect
+import speech_recognition as sr
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -116,6 +118,21 @@ def recognize():
         except Exception as e:
             return jsonify({"error": f"An error occurred during speech recognition: {e}"}), 500
 
+def detect_audio_language(audio_file):
+    r = sr.Recognizer()
+    with sr.AudioFile(audio_file) as source:
+        audio = r.record(source)
+    try:
+        # Recognize speech using Google Speech Recognition
+        text = r.recognize_google(audio)
+        # Detect language from the recognized text
+        lang = detect(text)
+        return lang, text
+    except sr.UnknownValueError:
+        return None, None
+    except sr.RequestError:
+        return None, None
+
 @app.route('/speech-to-text', methods=['POST'])
 def speech_to_text():
     if 'file' not in request.files:
@@ -125,14 +142,16 @@ def speech_to_text():
         return jsonify({"error": "No file selected"}), 400
     if file:
         try:
-            # Download the model if it does not already exist
-            model_path = "vosk-model-small-en-us-0.15"
-            if not os.path.exists(model_path):
-                from vosk import Model, SpkModel
-                model = Model(lang="en-us")
-                spk_model = SpkModel(lang="en-us")
+            # Detect the language of the audio
+            lang, text = detect_audio_language(file)
+            if not lang:
+                return jsonify({"error": "Could not detect language from audio"}), 500
 
             # Load the model
+            model_path = f"vosk-model-small-{lang}-0.15"
+            if not os.path.exists(model_path):
+                return jsonify({"error": f"Vosk model for language '{lang}' not found."}), 500
+
             model = vosk.Model(model_path)
 
             # Process the audio file
@@ -151,7 +170,7 @@ def speech_to_text():
             result = json.loads(rec.FinalResult())
             transcript = result['text']
 
-            return jsonify({"transcript": transcript})
+            return jsonify({"transcript": transcript, "language": lang})
         except Exception as e:
             return jsonify({"error": f"An error occurred during speech-to-text: {e}"}), 500
 
