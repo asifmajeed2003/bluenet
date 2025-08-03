@@ -1,22 +1,17 @@
-import sys
-import os
-
-# Add the backend directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
 import config
 import requests
 import openrouteservice
-from ultralytics import YOLO
-from PIL import Image
-import io
-import speech_recognition as sr
+from imageai.Detection import ObjectDetection
+import os
+import vosk
+import wave
+import json
 from gtts import gTTS
+import io
 import sqlite3
-import httpx
 
 app = Flask(__name__)
 CORS(app)
@@ -30,7 +25,6 @@ def chat():
     client = openai.OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=config.OPENROUTER_API_KEY,
-        http_client=httpx.Client(proxies={}),
     )
 
     try:
@@ -46,7 +40,6 @@ def chat():
         )
         return jsonify({"response": response.choices[0].message.content})
     except Exception as e:
-        print(f"An error occurred in the chat endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/alerts', methods=['GET'])
@@ -66,7 +59,6 @@ def alerts():
         # In a real application, you would parse the response to extract the relevant weather information.
         return jsonify(data)
     except Exception as e:
-        print(f"An error occurred in the alerts endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/navigate', methods=['POST'])
@@ -87,7 +79,6 @@ def navigate():
         )
         return jsonify(routes)
     except Exception as e:
-        print(f"An error occurred in the navigate endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/recognize', methods=['POST'])
@@ -99,24 +90,22 @@ def recognize():
         return jsonify({"error": "No file selected"}), 400
     if file:
         try:
-            # Load the model
-            model = YOLO('yolov8n.pt')
+            execution_path = os.getcwd()
+            file.save(os.path.join(execution_path, file.filename))
 
-            # Preprocess the image
-            image = Image.open(file).convert('RGB')
+            detector = ObjectDetection()
+            detector.setModelTypeAsYOLOv3()
+            detector.setModelPath(os.path.join(execution_path , "yolov3.pt"))
+            detector.loadModel()
+            detections = detector.detectObjectsFromImage(input_image=os.path.join(execution_path , file.filename), output_image_path=os.path.join(execution_path , "imagenew.jpg"), minimum_percentage_probability=30)
 
-            # Run inference
-            results = model(image)
-
-            # Postprocess the output
             predictions = []
-            for result in results:
-                for box in result.boxes:
-                    predictions.append({
-                        "box": box.xyxy[0].tolist(),
-                        "score": box.conf[0].item(),
-                        "label": model.names[int(box.cls[0].item())]
-                    })
+            for eachObject in detections:
+                predictions.append({
+                    "box": eachObject["box_points"],
+                    "score": eachObject["percentage_probability"],
+                    "label": eachObject["name"]
+                })
 
             return jsonify({"predictions": predictions})
         except Exception as e:
@@ -130,16 +119,27 @@ def speech_to_text():
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     if file:
-        r = sr.Recognizer()
-        with sr.AudioFile(file) as source:
-            audio = r.record(source)
         try:
-            transcript = r.recognize_google(audio)
+            # Load the model
+            model = vosk.Model("vosk-model-small-en-us-0.15")
+
+            # Process the audio file
+            wf = wave.open(file, "rb")
+            rec = vosk.KaldiRecognizer(model, wf.getframerate())
+            rec.SetWords(True)
+
+            while True:
+                data = wf.readframes(4000)
+                if len(data) == 0:
+                    break
+                if rec.AcceptWaveform(data):
+                    pass
+
+            # Get the transcript
+            result = json.loads(rec.FinalResult())
+            transcript = result['text']
+
             return jsonify({"transcript": transcript})
-        except sr.UnknownValueError:
-            return jsonify({"error": "Google Speech Recognition could not understand audio"}), 500
-        except sr.RequestError as e:
-            return jsonify({"error": f"Could not request results from Google Speech Recognition service; {e}"}), 500
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
