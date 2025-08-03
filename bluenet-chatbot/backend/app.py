@@ -90,14 +90,17 @@ def recognize():
         return jsonify({"error": "No file selected"}), 400
     if file:
         try:
-            execution_path = os.getcwd()
-            file.save(os.path.join(execution_path, file.filename))
+            # Save the file to a temporary directory
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            file_path = os.path.join(temp_dir, file.filename)
+            file.save(file_path)
 
             detector = ObjectDetection()
             detector.setModelTypeAsYOLOv3()
-            detector.setModelPath(os.path.join(execution_path , "yolov3.pt"))
+            detector.setModelPath(os.path.join(temp_dir , "yolov3.pt"))
             detector.loadModel()
-            detections = detector.detectObjectsFromImage(input_image=os.path.join(execution_path , file.filename), output_image_path=os.path.join(execution_path , "imagenew.jpg"), minimum_percentage_probability=30)
+            detections = detector.detectObjectsFromImage(input_image=file_path, output_image_path=os.path.join(temp_dir , "imagenew.jpg"), minimum_percentage_probability=30)
 
             predictions = []
             for eachObject in detections:
@@ -109,7 +112,7 @@ def recognize():
 
             return jsonify({"predictions": predictions})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": f"An error occurred during speech recognition: {e}"}), 500
 
 @app.route('/speech-to-text', methods=['POST'])
 def speech_to_text():
@@ -120,8 +123,15 @@ def speech_to_text():
         return jsonify({"error": "No file selected"}), 400
     if file:
         try:
+            # Download the model if it does not already exist
+            model_path = "vosk-model-small-en-us-0.15"
+            if not os.path.exists(model_path):
+                from vosk import Model, SpkModel
+                model = Model(lang="en-us")
+                spk_model = SpkModel(lang="en-us")
+
             # Load the model
-            model = vosk.Model("vosk-model-small-en-us-0.15")
+            model = vosk.Model(model_path)
 
             # Process the audio file
             wf = wave.open(file, "rb")
@@ -141,7 +151,7 @@ def speech_to_text():
 
             return jsonify({"transcript": transcript})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": f"An error occurred during speech-to-text: {e}"}), 500
 
 @app.route('/text-to-speech', methods=['POST'])
 def text_to_speech():

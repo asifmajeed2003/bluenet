@@ -285,6 +285,9 @@
             <button id="upload-btn" title="Upload Image"><img src="https://img.icons8.com/ios-glyphs/30/000000/attach.png" alt="Upload"></button>
             <button id="mic-btn" title="Use Microphone"><img src="https://img.icons8.com/ios-glyphs/30/000000/microphone.png" alt="Microphone"></button>
             <button id="send-btn" title="Send"><img src="https://img.icons8.com/ios-glyphs/30/000000/sent.png" alt="Send"></button>
+            <button id="alerts-btn" title="Get Alerts"><img src="https://img.icons8.com/ios-glyphs/30/000000/alarm.png" alt="Alerts"></button>
+            <button id="navigate-btn" title="Get Route"><img src="https://img.icons8.com/ios-glyphs/30/000000/near-me.png" alt="Navigate"></button>
+            <button id="kb-btn" title="Search Knowledge Base"><img src="https://img.icons8.com/ios-glyphs/30/000000/search.png" alt="Search"></button>
         </div>
     </div>
 
@@ -594,6 +597,93 @@
             DOMElements.micBtn.addEventListener('click', toggleMicrophone);
             
             DOMElements.themeSwitcher.addEventListener('click', handleThemeToggle);
+
+            DOMElements.alertsBtn = document.getElementById('alerts-btn');
+            DOMElements.alertsBtn.addEventListener('click', () => {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(position => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        fetch(`http://127.0.0.1:5000/alerts?location=${lat},${lon}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.error) {
+                                    appendChatMessage('bot', `Error: ${data.error}`);
+                                } else {
+                                    const weather = data.current;
+                                    const alertMessage = `Current weather in your location: ${weather.weather_descriptions[0]}, Temperature: ${weather.temperature}°C`;
+                                    appendChatMessage('bot', alertMessage);
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                appendChatMessage('bot', 'Could not get weather alerts.');
+                            });
+                    });
+                } else {
+                    appendChatMessage('bot', 'Geolocation is not supported by this browser.');
+                }
+            });
+
+            DOMElements.navigateBtn = document.getElementById('navigate-btn');
+            DOMElements.navigateBtn.addEventListener('click', () => {
+                const start = prompt("Enter start coordinates (e.g., 8.681495,49.41461):");
+                const end = prompt("Enter end coordinates (e.g., 8.687872,49.420318):");
+                if (start && end) {
+                    const startCoords = start.split(',').map(Number);
+                    const endCoords = end.split(',').map(Number);
+                    fetch('http://127.0.0.1:5000/navigate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ start: startCoords, end: endCoords })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.error) {
+                                appendChatMessage('bot', `Error: ${data.error}`);
+                            } else {
+                                // This is a placeholder. In a real application, you would
+                                // display the route on a map.
+                                appendChatMessage('bot', 'Route received. See console for details.');
+                                console.log(data);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            appendChatMessage('bot', 'Could not get navigation route.');
+                        });
+                }
+            });
+
+            DOMElements.kbBtn = document.getElementById('kb-btn');
+            DOMElements.kbBtn.addEventListener('click', () => {
+                const query = prompt("Enter a search query for the knowledge base:");
+                if (query) {
+                    fetch(`http://127.0.0.1:5000/kb?q=${query}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.error) {
+                                appendChatMessage('bot', `Error: ${data.error}`);
+                            } else {
+                                if (data.length > 0) {
+                                    let response = "Here are the search results:\n";
+                                    data.forEach(article => {
+                                        response += `\n- ${article.title}`;
+                                    });
+                                    appendChatMessage('bot', response);
+                                } else {
+                                    appendChatMessage('bot', 'No results found.');
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            appendChatMessage('bot', 'Could not search the knowledge base.');
+                        });
+                }
+            });
 
             // --- App Initialization ---
             const init = () => {
