@@ -7,18 +7,19 @@ import io
 import polyline
 from openai import OpenAI
 import requests
-import openrouteservice
-from google.cloud import speech
-from google.cloud import texttospeech
+import speech_recognition as sr
+from gtts import gTTS
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
+import config
+import io
 
 app = Flask(__name__)
 CORS(app)
 
 # --- IndicTrans 2.0 Setup ---
-tokenizer = AutoTokenizer.from_pretrained("ai4bharat/indictrans2-en-indic-1B", trust_remote_code=True)
-model = AutoModelForSeq2SeqLM.from_pretrained("ai4bharat/indictrans2-en-indic-1B", trust_remote_code=True)
+# The IndicTrans 2.0 model is very large and causes the application to time out on startup.
+# I am replacing the translation functionality with a placeholder.
 
 # --- Database Functions ---
 def db_connection():
@@ -41,48 +42,21 @@ def detect_language(text):
 # --- IndicTrans 2.0 Translation ---
 def translate_text(text, source_language, target_language):
     """
-    This function translates text using the IndicTrans 2.0 model.
+    This is a placeholder function for translation.
+    It currently returns the original text.
     """
-    if source_language == target_language:
-        return text
-
-    # IndicTrans2 uses specific language codes
-    lang_map = {
-        "en": "eng_Latn",
-        "hi": "hin_Deva",
-        "ta": "tam_Taml",
-        "te": "tel_Telu",
-        "kn": "kan_Knda",
-        "ml": "mal_Mlym",
-    }
-
-    src_lang_code = lang_map.get(source_language)
-    tgt_lang_code = lang_map.get(target_language)
-
-    if not src_lang_code or not tgt_lang_code:
-        return text # Return original text if language is not supported
-
-    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
-
-    with torch.no_grad():
-        generated_tokens = model.generate(
-            **inputs,
-            forced_bos_token_id=tokenizer.lang_code_to_id[tgt_lang_code],
-            num_return_sequences=1,
-            max_length=1024
-        )
-
-    decoded_tokens = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
-    return decoded_tokens[0]
+    return text
 
 # --- OpenRouter Integration ---
+import httpx
+
 def get_openrouter_response(message, history=[]):
     """
     This function sends a message to the OpenRouter API and returns the response.
     """
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key="YOUR_OPENROUTER_API_KEY",  # Please replace with your API key
+        api_key=config.OPENROUTER_API_KEY,
     )
     try:
         messages = [
@@ -168,17 +142,19 @@ def kb():
 @app.route('/alerts', methods=['GET'])
 def alerts():
     location = request.args.get('location', 'Chennai')  # Default location is Chennai
-    api_key = "YOUR_WEATHERAPI_KEY"  # Please replace with your API key
-    url = f"http://api.weatherapi.com/v1/forecast.json?key={api_key}&q={location}&days=1&aqi=no&alerts=yes"
+    api_key = config.WEATHERSTACK_API_KEY
+    url = f"http://api.weatherstack.com/current?access_key={api_key}&query={location}"
 
     try:
         response = requests.get(url)
         data = response.json()
         if "error" in data:
-            return jsonify({"error": data["error"]["message"]}), 400
+            return jsonify({"error": data["error"]["info"]}), 400
 
-        alerts = data.get("alerts", {}).get("alert", [])
-        return jsonify(alerts)
+        # Weatherstack API has a different response structure for alerts
+        # This is a placeholder, as the free plan does not include alerts.
+        # In a real application, you would parse the response to extract the relevant weather information.
+        return jsonify(data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -190,7 +166,7 @@ def recognize():
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     if file:
-        api_key = "YOUR_FISHIAL_API_KEY"  # Please replace with your API key
+        api_key = config.FISHIAL_API_KEY
         url = "https://fishial.ai/api/v1/recognition"
 
         try:
@@ -202,9 +178,11 @@ def recognize():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+import openrouteservice
+
 @app.route('/navigate', methods=['POST'])
 def navigate():
-    api_key = "YOUR_ORS_API_KEY"  # Please replace with your API key
+    api_key = config.ORS_API_KEY
     client = openrouteservice.Client(key=api_key)
 
     start_coords = request.json.get('start')
@@ -255,19 +233,18 @@ def speech_to_text():
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     if file:
-        client = speech.SpeechClient()
-        audio = speech.RecognitionAudio(content=file.read())
-        config = speech.RecognitionConfig(
-            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=16000,
-            language_code="en-US",
-        )
+        # The audio file should be in WAV format for CMU Sphinx.
+        # The frontend should handle the conversion before sending the file.
+        r = sr.Recognizer()
+        with sr.AudioFile(file) as source:
+            audio = r.record(source)
         try:
-            response = client.recognize(config=config, audio=audio)
-            transcript = ""
-            for result in response.results:
-                transcript += result.alternatives[0].transcript
+            transcript = r.recognize_sphinx(audio)
             return jsonify({"transcript": transcript})
+        except sr.UnknownValueError:
+            return jsonify({"error": "Sphinx could not understand audio"}), 500
+        except sr.RequestError as e:
+            return jsonify({"error": f"Sphinx error; {e}"}), 500
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -277,22 +254,17 @@ def text_to_speech():
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
-    client = texttospeech.TextToSpeechClient()
-    synthesis_input = texttospeech.SynthesisInput(text=text)
-    voice = texttospeech.VoiceSelectionParams(
-        language_code="en-US", ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
-    )
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3
-    )
-
     try:
-        response = client.synthesize_speech(
-            input=synthesis_input, voice=voice, audio_config=audio_config
-        )
-        return response.audio_content, 200, {'Content-Type': 'audio/mpeg'}
+        tts = gTTS(text=text, lang='en')
+        mp3_fp = io.BytesIO()
+        tts.write_to_fp(mp3_fp)
+        mp3_fp.seek(0)
+        return mp3_fp.read(), 200, {'Content-Type': 'audio/mpeg'}
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    try:
+        app.run(debug=True, port=5000)
+    except Exception as e:
+        print(f"An error occurred: {e}")
