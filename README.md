@@ -4,7 +4,7 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
 
 ## Features
 
-*   **Multilingual Voice & Text Interface:** Supports regional languages and uses Google Cloud speech APIs and IndicTrans 2.0 for translation.
+*   **Multilingual Voice & Text Interface:** Supports regional languages and uses Google Speech Recognition and gTTS for translation.
 *   **Regulatory Guidance Module:** Provides summaries of fishery regulations, conservation species, prohibited areas, and gear specifications.
 *   **Safety Protocols Module:** Offers step-by-step life-jacket, distress, and first-aid procedures, as well as one-touch emergency workflows.
 *   **Environmental Alerts Module:** Delivers live weather, tide, and cyclone warnings with push notifications.
@@ -20,10 +20,10 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
 *   **Frontend:** HTML5, CSS3, JavaScript
 *   **Backend:** Python 3.x, Flask
 *   **Database:** SQLite
-*   **NLP/AI:** OpenRouter (for chat), IndicTrans 2.0 (for translation)
-*   **Voice Services:** Google Cloud Text-to-Speech & Speech-to-Text
-*   **Weather Data:** WeatherAPI
-*   **Fish Recognition:** Fishial API
+*   **NLP/AI:** OpenRouter (for chat)
+*   **Voice Services:** Vosk, gTTS
+*   **Weather Data:** Weatherstack
+*   **Fish Recognition:** ImageAI
 *   **Navigation:** OpenRouteService API
 
 ## Setup and Installation
@@ -41,20 +41,10 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
         ```bash
         pip install -r requirements.txt
         ```
-    *   Initialize the database:
-        ```bash
-        python database.py
-        ```
-    *   Populate the database with sample data:
-        ```bash
-        python populate_db.py
-        ```
-    *   **API Keys:** You will need to get API keys for the following services and add them to the `app.py` file:
+    *   **API Keys:** You will need to get API keys for the following services and add them to the `config.py` file:
         *   OpenRouter
-        *   WeatherAPI
-        *   Fishial API
+        *   Weatherstack
         *   OpenRouteService
-        *   Google Cloud Platform (for Speech-to-Text and Text-to-Speech)
     *   Run the Flask server:
         ```bash
         python app.py
@@ -70,14 +60,12 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
 *   Use the theme switcher to toggle between light and dark mode.
 *   You can also use the following endpoints to interact with the backend:
     *   `/chat`: Send a chat message.
-    *   `/translate`: Translate text.
-    *   `/kb`: Manage the knowledge base.
     *   `/alerts`: Get the latest weather alerts.
     *   `/recognize`: Recognize a fish species from an image.
     *   `/navigate`: Get a safe route to the shore.
-    *   `/users`: Manage user profiles.
     *   `/speech-to-text`: Convert speech to text.
     *   `/text-to-speech`: Convert text to speech.
+    *   `/kb`: Manage the knowledge base.
 
 ## Creating a Presentation
 
