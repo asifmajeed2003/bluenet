@@ -17,3 +17,4 @@ numpy<2.0
 opencv-python==4.8.0.74
 imageai==2.1.6
 vosk==0.3.45
+python-dotenv==0.21.0
