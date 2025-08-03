@@ -1,5 +1,5 @@
-# Ignore the config file with the API keys
-bluenet-chatbot/backend/config.py
+# Ignore the .env file with the API keys
+bluenet-chatbot/backend/.env
 
 # Ignore the Python cache files
 bluenet-chatbot/backend/__pycache__/

@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
-import config
+from dotenv import load_dotenv
 import requests
 import openrouteservice
 from imageai.Detection import ObjectDetection
+
+load_dotenv()
 import os
 import vosk
 import wave
@@ -24,7 +26,7 @@ def chat():
 
     client = openai.OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=config.OPENROUTER_API_KEY,
+        api_key=os.environ.get("OPENROUTER_API_KEY"),
     )
 
     try:
@@ -45,7 +47,7 @@ def chat():
 @app.route('/alerts', methods=['GET'])
 def alerts():
     location = request.args.get('location', 'Chennai')  # Default location is Chennai
-    api_key = config.WEATHERSTACK_API_KEY
+    api_key = os.environ.get("WEATHERSTACK_API_KEY")
     url = f"http://api.weatherstack.com/current?access_key={api_key}&query={location}"
 
     try:
@@ -69,7 +71,7 @@ def navigate():
     if not start_coords or not end_coords:
         return jsonify({"error": "Start and end coordinates are required"}), 400
 
-    client = openrouteservice.Client(key=config.ORS_API_KEY)
+    client = openrouteservice.Client(key=os.environ.get("ORS_API_KEY"))
 
     try:
         routes = client.directions(
