@@ -1,0 +1,16 @@
+# Ignore the config file with the API keys
+bluenet-chatbot/backend/tests/config.py
+
+# Ignore the Python cache files
+bluenet-chatbot/backend/__pycache__/
+bluenet-chatbot/backend/tests/__pycache__/
+
+# Ignore the downloaded model and labels files
+bluenet-chatbot/backend/model.onnx
+bluenet-chatbot/backend/labels.txt
+
+# Ignore the log file
+app.log
+
+# Ignore the database file
+bluenet.db
