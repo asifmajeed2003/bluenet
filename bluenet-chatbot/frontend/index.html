@@ -494,6 +494,27 @@
 
                 if (type === 'text') {
                     messageElement.textContent = content;
+                    if (sender === 'bot') {
+                        const voiceIcon = document.createElement('img');
+                        voiceIcon.src = 'https://img.icons8.com/ios-glyphs/30/000000/speaker.png';
+                        voiceIcon.style.cursor = 'pointer';
+                        voiceIcon.style.marginLeft = '10px';
+                        voiceIcon.addEventListener('click', () => {
+                            fetch('http://127.0.0.1:5000/text-to-speech', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ text: content })
+                            })
+                                .then(response => response.blob())
+                                .then(blob => {
+                                    const audio = new Audio(URL.createObjectURL(blob));
+                                    audio.play();
+                                });
+                        });
+                        messageElement.appendChild(voiceIcon);
+                    }
                 } else if (type === 'image') {
                     const img = document.createElement('img');
                     img.src = content;
@@ -519,7 +540,45 @@
             const sendAudio = (audioBlob) => {
                 const audioUrl = URL.createObjectURL(audioBlob);
                 appendChatMessage('user', audioUrl, 'audio');
-                setTimeout(() => appendChatMessage('bot', 'I received your audio message.'), 1000);
+
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'audio.wav');
+
+                fetch('http://127.0.0.1:5000/speech-to-text', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            appendChatMessage('bot', `Error: ${data.error}`);
+                        } else {
+                            appendChatMessage('user', data.transcript, 'text');
+                            fetch('http://127.0.0.1:5000/chat', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ message: data.transcript })
+                            })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.error) {
+                                        appendChatMessage('bot', `Error: ${data.error}`);
+                                    } else {
+                                        appendChatMessage('bot', data.response);
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error:', error);
+                                    appendChatMessage('bot', 'Could not get a response from the chatbot.');
+                                });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        appendChatMessage('bot', 'Could not process audio.');
+                    });
             };
 
             const toggleMicrophone = () => {
@@ -580,12 +639,38 @@
             DOMElements.visualGuideBtn.addEventListener('click', showVisualGuide);
             DOMElements.closeGuideBtn.addEventListener('click', () => DOMElements.guideModal.classList.add('hidden'));
             
-            DOMElements.sendBtn.addEventListener('click', () => {
+            const sendMessage = () => {
                 const message = DOMElements.userInput.value.trim();
                 if (message) {
                     appendChatMessage('user', message, 'text');
                     DOMElements.userInput.value = '';
-                    setTimeout(() => appendChatMessage('bot', 'This is a response.'), 1000);
+                    fetch('http://127.0.0.1:5000/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ message: message })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.error) {
+                                appendChatMessage('bot', `Error: ${data.error}`);
+                            } else {
+                                appendChatMessage('bot', data.response);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            appendChatMessage('bot', 'Could not get a response from the chatbot.');
+                        });
+                }
+            };
+
+            DOMElements.sendBtn.addEventListener('click', sendMessage);
+
+            DOMElements.userInput.addEventListener('keyup', (event) => {
+                if (event.key === 'Enter') {
+                    sendMessage();
                 }
             });
 
@@ -627,33 +712,38 @@
 
             DOMElements.navigateBtn = document.getElementById('navigate-btn');
             DOMElements.navigateBtn.addEventListener('click', () => {
-                const start = prompt("Enter start coordinates (e.g., 8.681495,49.41461):");
-                const end = prompt("Enter end coordinates (e.g., 8.687872,49.420318):");
-                if (start && end) {
-                    const startCoords = start.split(',').map(Number);
-                    const endCoords = end.split(',').map(Number);
-                    fetch('http://127.0.0.1:5000/navigate', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ start: startCoords, end: endCoords })
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.error) {
-                                appendChatMessage('bot', `Error: ${data.error}`);
-                            } else {
-                                // This is a placeholder. In a real application, you would
-                                // display the route on a map.
-                                appendChatMessage('bot', 'Route received. See console for details.');
-                                console.log(data);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            appendChatMessage('bot', 'Could not get navigation route.');
-                        });
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(position => {
+                        const startCoords = [position.coords.longitude, position.coords.latitude];
+                        const end = prompt("Enter end coordinates (e.g., 8.687872,49.420318):");
+                        if (end) {
+                            const endCoords = end.split(',').map(Number);
+                            fetch('http://127.0.0.1:5000/navigate', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ start: startCoords, end: endCoords })
+                            })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.error) {
+                                        appendChatMessage('bot', `Error: ${data.error}`);
+                                    } else {
+                                        // This is a placeholder. In a real application, you would
+                                        // display the route on a map.
+                                        appendChatMessage('bot', 'Route received. See console for details.');
+                                        console.log(data);
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error:', error);
+                                    appendChatMessage('bot', 'Could not get navigation route.');
+                                });
+                        }
+                    });
+                } else {
+                    appendChatMessage('bot', 'Geolocation is not supported by this browser.');
                 }
             });
 
