@@ -6,6 +6,7 @@ import requests
 import openrouteservice
 from imageai.Detection import ObjectDetection
 import os
+from opencage.geocoder import OpenCageGeocode
 import vosk
 import wave
 import json
@@ -20,9 +21,17 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+def translate(text, target_language):
+    try:
+        tts = gTTS(text=text, lang=target_language)
+        return tts.text
+    except Exception as e:
+        return text
+
 @app.route('/chat', methods=['POST'])
 def chat():
     user_message = request.json.get('message')
+    language = request.json.get('language', 'en')
     if not user_message:
         return jsonify({"error": "No message provided"}), 400
 
@@ -42,7 +51,9 @@ def chat():
                 {"role": "user", "content": user_message},
             ],
         )
-        return jsonify({"response": response.choices[0].message.content})
+        response_text = response.choices[0].message.content
+        translated_response = translate(response_text, language)
+        return jsonify({"response": translated_response})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -68,17 +79,25 @@ def alerts():
 @app.route('/navigate', methods=['POST'])
 def navigate():
     start_coords = request.json.get('start')
-    end_coords = request.json.get('end')
+    destination = request.json.get('destination')
 
-    if not start_coords or not end_coords:
-        return jsonify({"error": "Start and end coordinates are required"}), 400
+    if not start_coords or not destination:
+        return jsonify({"error": "Start coordinates and destination are required"}), 400
+
+    geocoder = OpenCageGeocode(os.environ.get("OPENCAGE_API_KEY"))
+    results = geocoder.geocode(destination)
+
+    if not results or len(results) == 0:
+        return jsonify({"error": "Could not find coordinates for the destination."}), 400
+
+    end_coords = [results[0]['geometry']['lng'], results[0]['geometry']['lat']]
 
     client = openrouteservice.Client(key=os.environ.get("ORS_API_KEY"))
 
     try:
         routes = client.directions(
             coordinates=[start_coords, end_coords],
-            profile='driving-car',
+            profile='foot-walking',
             format='json'
         )
         return jsonify(routes)

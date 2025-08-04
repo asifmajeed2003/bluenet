@@ -182,8 +182,8 @@
         #user-input { flex-grow: 1; border: none; border-radius: 20px; padding: 12px 18px; background-color: var(--input-bg-light); color: var(--text-color-light); outline: none; font-size: 1rem; }
         #user-input::placeholder { color: var(--text-color-light); opacity: 0.7; }
         
-        #send-btn, #mic-btn, #upload-btn { background: transparent; border: none; cursor: pointer; margin-left: 12px; padding: 0; display: flex; align-items: center; justify-content: center; }
-        #send-btn img, #mic-btn img, #upload-btn img {
+        #send-btn, #mic-btn, #upload-btn, #alerts-btn, #navigate-btn, #kb-btn { background: transparent; border: none; cursor: pointer; margin-left: 12px; padding: 0; display: flex; align-items: center; justify-content: center; }
+        #send-btn img, #mic-btn img, #upload-btn img, #alerts-btn img, #navigate-btn img, #kb-btn img {
             width: 24px;
             height: 24px;
         }
@@ -209,6 +209,26 @@
         .dark-mode .typing-indicator span { background-color: var(--text-color-dark); }
 
         .hidden { display: none !important; }
+
+        .glowing-red {
+            animation: glowing-red 1s infinite;
+        }
+
+        .glowing-green {
+            animation: glowing-green 1s infinite;
+        }
+
+        @keyframes glowing-red {
+            0% { text-shadow: 0 0 5px #ff0000, 0 0 10px #ff0000, 0 0 15px #ff0000, 0 0 20px #ff0000; }
+            50% { text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000, 0 0 30px #ff0000, 0 0 40px #ff0000; }
+            100% { text-shadow: 0 0 5px #ff0000, 0 0 10px #ff0000, 0 0 15px #ff0000, 0 0 20px #ff0000; }
+        }
+
+        @keyframes glowing-green {
+            0% { text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00, 0 0 15px #00ff00, 0 0 20px #00ff00; }
+            50% { text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00, 0 0 30px #00ff00, 0 0 40px #00ff00; }
+            100% { text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00, 0 0 15px #00ff00, 0 0 20px #00ff00; }
+        }
     </style>
 </head>
 <body>
@@ -293,6 +313,8 @@
 
     <div class="wave-overlay"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://www.webrtc-experiment.com/RecordRTC.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
 
@@ -326,7 +348,8 @@
             let appState = {
                 isLoginMode: true,
                 currentLanguage: 'en',
-                loggedInUser: null
+                loggedInUser: null,
+                uploadedImage: null
             };
             
             // --- Media Recorder State ---
@@ -493,8 +516,8 @@
                 messageElement.classList.add('message', `${sender}-message`);
 
                 if (type === 'text') {
-                    messageElement.textContent = content;
                     if (sender === 'bot') {
+                        messageElement.innerHTML = marked.parse(content);
                         const voiceIcon = document.createElement('img');
                         voiceIcon.src = 'https://img.icons8.com/ios-glyphs/30/000000/speaker.png';
                         voiceIcon.style.cursor = 'pointer';
@@ -514,6 +537,8 @@
                                 });
                         });
                         messageElement.appendChild(voiceIcon);
+                    } else {
+                        messageElement.textContent = content;
                     }
                 } else if (type === 'image') {
                     const img = document.createElement('img');
@@ -533,16 +558,24 @@
 
             const displayUploadedImage = (file) => {
                 const reader = new FileReader();
-                reader.onload = (e) => appendChatMessage('user', e.target.result, 'image');
+                reader.onload = (e) => {
+                    appendChatMessage('user', e.target.result, 'image');
+                    appState.uploadedImage = file;
+                };
                 reader.readAsDataURL(file);
             };
 
             const sendAudio = (audioBlob) => {
                 const audioUrl = URL.createObjectURL(audioBlob);
                 appendChatMessage('user', audioUrl, 'audio');
+                setReadyStatus(false);
 
                 const formData = new FormData();
                 formData.append('file', audioBlob, 'audio.wav');
+                if (appState.uploadedImage) {
+                    formData.append('image', appState.uploadedImage, appState.uploadedImage.name);
+                    appState.uploadedImage = null;
+                }
 
                 fetch('http://127.0.0.1:5000/speech-to-text', {
                     method: 'POST',
@@ -559,7 +592,7 @@
                                 headers: {
                                     'Content-Type': 'application/json'
                                 },
-                                body: JSON.stringify({ message: data.transcript })
+                                body: JSON.stringify({ message: data.transcript, language: data.language })
                             })
                                 .then(response => response.json())
                                 .then(data => {
@@ -578,26 +611,29 @@
                     .catch(error => {
                         console.error('Error:', error);
                         appendChatMessage('bot', 'Could not process audio.');
-                    });
+                    })
+                    .finally(() => setReadyStatus(true));
             };
 
             const toggleMicrophone = () => {
                 const isRecording = mediaRecorder && mediaRecorder.state === 'recording';
                 if (isRecording) {
-                    mediaRecorder.stop();
+                    mediaRecorder.stopRecording(() => {
+                        const audioBlob = mediaRecorder.getBlob();
+                        sendAudio(audioBlob);
+                        mediaRecorder = null;
+                    });
                     DOMElements.micBtn.querySelector('img').src = "https://img.icons8.com/ios-glyphs/30/000000/microphone.png";
                 } else {
                     navigator.mediaDevices.getUserMedia({ audio: true })
                         .then(stream => {
-                            mediaRecorder = new MediaRecorder(stream);
-                            mediaRecorder.start();
-                            DOMElements.micBtn.querySelector('img').src = "https://img.icons8.com/ios-glyphs/30/fa5252/stop-circled.png";
-                            audioChunks = [];
-                            mediaRecorder.addEventListener("dataavailable", event => audioChunks.push(event.data));
-                            mediaRecorder.addEventListener("stop", () => {
-                                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                                sendAudio(audioBlob);
+                            mediaRecorder = RecordRTC(stream, {
+                                type: 'audio',
+                                mimeType: 'audio/wav',
+                                recorderType: RecordRTC.StereoAudioRecorder
                             });
+                            mediaRecorder.startRecording();
+                            DOMElements.micBtn.querySelector('img').src = "https://img.icons8.com/ios-glyphs/30/fa5252/stop-circled.png";
                         })
                         .catch(error => {
                             console.error("Mic error:", error);
@@ -641,28 +677,43 @@
             
             const sendMessage = () => {
                 const message = DOMElements.userInput.value.trim();
-                if (message) {
-                    appendChatMessage('user', message, 'text');
+                if (message || appState.uploadedImage) {
+                    setReadyStatus(false);
+                    if (message) {
+                        appendChatMessage('user', message, 'text');
+                    }
                     DOMElements.userInput.value = '';
-                    fetch('http://127.0.0.1:5000/chat', {
+
+                    const formData = new FormData();
+                    if (message) {
+                        formData.append('message', message);
+                    }
+                    if (appState.uploadedImage) {
+                        formData.append('file', appState.uploadedImage, appState.uploadedImage.name);
+                        appState.uploadedImage = null;
+                    }
+
+                    const endpoint = formData.has('file') ? 'recognize' : 'chat';
+
+                    fetch(`http://127.0.0.1:5000/${endpoint}`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ message: message })
+                        body: formData.has('file') ? formData : JSON.stringify({ message: message }),
+                        headers: formData.has('file') ? {} : { 'Content-Type': 'application/json' }
                     })
                         .then(response => response.json())
                         .then(data => {
                             if (data.error) {
                                 appendChatMessage('bot', `Error: ${data.error}`);
                             } else {
-                                appendChatMessage('bot', data.response);
+                                const response = data.predictions ? data.predictions.map(p => `${p.label}: ${p.score.toFixed(2)}`).join('\n') : data.response;
+                                appendChatMessage('bot', response);
                             }
                         })
                         .catch(error => {
                             console.error('Error:', error);
                             appendChatMessage('bot', 'Could not get a response from the chatbot.');
-                        });
+                        })
+                        .finally(() => setReadyStatus(true));
                 }
             };
 
@@ -685,6 +736,7 @@
 
             DOMElements.alertsBtn = document.getElementById('alerts-btn');
             DOMElements.alertsBtn.addEventListener('click', () => {
+                setReadyStatus(false);
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(position => {
                         const lat = position.coords.latitude;
@@ -703,27 +755,29 @@
                             .catch(error => {
                                 console.error('Error:', error);
                                 appendChatMessage('bot', 'Could not get weather alerts.');
-                            });
+                            })
+                            .finally(() => setReadyStatus(true));
                     });
                 } else {
                     appendChatMessage('bot', 'Geolocation is not supported by this browser.');
+                    setReadyStatus(true);
                 }
             });
 
             DOMElements.navigateBtn = document.getElementById('navigate-btn');
             DOMElements.navigateBtn.addEventListener('click', () => {
+                setReadyStatus(false);
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(position => {
                         const startCoords = [position.coords.longitude, position.coords.latitude];
-                        const end = prompt("Enter end coordinates (e.g., 8.687872,49.420318):");
-                        if (end) {
-                            const endCoords = end.split(',').map(Number);
+                        const destination = prompt("Enter your destination:");
+                        if (destination) {
                             fetch('http://127.0.0.1:5000/navigate', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json'
                                 },
-                                body: JSON.stringify({ start: startCoords, end: endCoords })
+                                body: JSON.stringify({ start: startCoords, destination: destination })
                             })
                                 .then(response => response.json())
                                 .then(data => {
@@ -739,11 +793,15 @@
                                 .catch(error => {
                                     console.error('Error:', error);
                                     appendChatMessage('bot', 'Could not get navigation route.');
-                                });
+                                })
+                                .finally(() => setReadyStatus(true));
+                        } else {
+                            setReadyStatus(true);
                         }
                     });
                 } else {
                     appendChatMessage('bot', 'Geolocation is not supported by this browser.');
+                    setReadyStatus(true);
                 }
             });
 
@@ -776,6 +834,17 @@
             });
 
             // --- App Initialization ---
+            const setReadyStatus = (isReady) => {
+                const title = document.querySelector('.chat-header h1');
+                if (isReady) {
+                    title.classList.remove('glowing-red');
+                    title.classList.add('glowing-green');
+                } else {
+                    title.classList.remove('glowing-green');
+                    title.classList.add('glowing-red');
+                }
+            };
+
             const init = () => {
                 initializeDatabase();
                 showScreen(DOMElements.splashScreen);
@@ -787,6 +856,7 @@
                     document.body.classList.add('dark-mode');
                     DOMElements.themeSwitcher.querySelector('img').src = "https://img.icons8.com/ios-glyphs/30/ffffff/sun.png";
                 }
+                setReadyStatus(true);
             };
 
             init();
