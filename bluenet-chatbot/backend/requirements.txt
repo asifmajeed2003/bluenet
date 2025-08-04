@@ -19,3 +19,4 @@ imageai==2.1.6
 vosk==0.3.45
 langdetect==1.0.9
 python-dotenv==0.21.0
+opencage==2.1.0
