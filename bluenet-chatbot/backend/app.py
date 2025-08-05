@@ -13,20 +13,16 @@ import json
 from gtts import gTTS
 import io
 import sqlite3
-from langdetect import detect
 import speech_recognition as sr
+import translators as ts
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-def translate(text, target_language):
-    try:
-        tts = gTTS(text=text, lang=target_language)
-        return tts.text
-    except Exception as e:
-        return text
+def translate(text, to_language, from_language='auto'):
+    return ts.translate_text(text, to_language=to_language, from_language=from_language)
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -52,7 +48,7 @@ def chat():
             ],
         )
         response_text = response.choices[0].message.content
-        translated_response = translate(response_text, language)
+        translated_response = translate(response_text, to_language=language)
         return jsonify({"response": translated_response})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -121,23 +117,9 @@ def recognize():
                 file_path = os.path.join(temp_dir, file.filename)
                 file.save(file_path)
 
-                detector = ObjectDetection()
-                detector.setModelTypeAsYOLOv3()
-                detector.setModelPath(os.path.join(temp_dir , "yolov3.pt"))
-                detector.loadModel()
-                detections = detector.detectObjectsFromImage(input_image=file_path, output_image_path=os.path.join(temp_dir , "imagenew.jpg"), minimum_percentage_probability=30)
-
-                predictions = []
-                for eachObject in detections:
-                    predictions.append({
-                        "box": eachObject["box_points"],
-                        "score": eachObject["percentage_probability"],
-                        "label": eachObject["name"]
-                    })
-
-                return jsonify({"predictions": predictions})
+                return jsonify({"message": "Image uploaded successfully. Please send your query."})
             except Exception as e:
-                return jsonify({"error": f"An error occurred during image recognition: {e}"}), 500
+                return jsonify({"error": f"An error occurred during image upload: {e}"}), 500
         else:
             return jsonify({"error": "File is not an image"}), 400
 
@@ -146,36 +128,47 @@ def speech_to_text():
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400
     file = request.files['file']
-    language = request.form.get('language', 'en')
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     if file:
         try:
-            # Download the model if it does not already exist
-            model_path = f"vosk-model-small-{language}-0.15"
-            if not os.path.exists(model_path):
-                model = vosk.Model(lang=language)
+            r = sr.Recognizer()
+            with sr.AudioFile(file) as source:
+                audio = r.record(source)
 
-            # Load the model
-            model = vosk.Model(model_path)
+            # Detect language
+            try:
+                detected_language = r.recognize_google(audio, show_all=True)['alternative'][0]['language']
+            except (sr.UnknownValueError, sr.RequestError, KeyError):
+                detected_language = 'en' # fallback to English
 
-            # Process the audio file
-            wf = wave.open(file, "rb")
-            rec = vosk.KaldiRecognizer(model, wf.getframerate())
-            rec.SetWords(True)
+            # Transcribe audio
+            transcript = r.recognize_google(audio, language=detected_language)
 
-            while True:
-                data = wf.readframes(4000)
-                if len(data) == 0:
-                    break
-                if rec.AcceptWaveform(data):
-                    pass
+            # Translate to English
+            translated_transcript = translate(transcript, to_language='en')
 
-            # Get the transcript
-            result = json.loads(rec.FinalResult())
-            transcript = result['text']
+            # Get response from chatbot
+            client = openai.OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=os.environ.get("OPENROUTER_API_KEY"),
+            )
+            response = client.chat.completions.create(
+                model="deepseek/deepseek-r1",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are Bluenet, a helpful assistant for Indian coastal fishing communities. You provide information on regulations, safety, and weather. You are friendly and speak in simple terms.",
+                    },
+                    {"role": "user", "content": translated_transcript},
+                ],
+            )
+            response_text = response.choices[0].message.content
 
-            return jsonify({"transcript": transcript, "language": language})
+            # Translate response back to original language
+            translated_response = translate(response_text, to_language=detected_language)
+
+            return jsonify({"response": translated_response})
         except Exception as e:
             return jsonify({"error": f"An error occurred during speech-to-text: {e}"}), 500
 
@@ -238,6 +231,74 @@ def kb():
         cursor.execute(sql, (new_title, new_content, new_language))
         conn.commit()
         return f"Article with id: {cursor.lastrowid} created successfully", 201
+
+@app.route('/image-chat', methods=['POST'])
+def image_chat():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No file selected"}), 400
+
+    message = request.form.get('message')
+    if not message:
+        return jsonify({"error": "No message provided"}), 400
+
+    if file:
+        # Check if the file is an image
+        if file.content_type.startswith('image/'):
+            try:
+                # Save the file to a temporary directory
+                import tempfile
+                from ultralytics import YOLO
+
+                temp_dir = tempfile.gettempdir()
+                file_path = os.path.join(temp_dir, file.filename)
+                file.save(file_path)
+
+                # Load a pretrained YOLO11n model
+                model = YOLO("yolo11n.pt")
+
+                # Perform object detection on an image
+                results = model(file_path)
+
+                # Get the detected objects
+                detected_objects = []
+                for r in results:
+                    for c in r.boxes.cls:
+                        detected_objects.append(model.names[int(c)])
+
+                # Translate to English
+                translated_message = translate(message, to_language='en')
+
+                # Combine the message and the detected objects
+                combined_message = f"{translated_message} The user has uploaded an image with the following objects: {', '.join(detected_objects)}"
+
+                # Get response from chatbot
+                client = openai.OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=os.environ.get("OPENROUTER_API_KEY"),
+                )
+                response = client.chat.completions.create(
+                    model="deepseek/deepseek-r1",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are Bluenet, a helpful assistant for Indian coastal fishing communities. You provide information on regulations, safety, and weather. You are friendly and speak in simple terms.",
+                        },
+                        {"role": "user", "content": combined_message},
+                    ],
+                )
+                response_text = response.choices[0].message.content
+
+                # Translate response back to original language
+                translated_response = translate(response_text, to_language=request.form.get('language', 'en'))
+
+                return jsonify({"response": translated_response})
+            except Exception as e:
+                return jsonify({"error": f"An error occurred during image processing: {e}"}), 500
+        else:
+            return jsonify({"error": "File is not an image"}), 400
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
