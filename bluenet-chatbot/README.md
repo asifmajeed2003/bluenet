@@ -4,7 +4,7 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
 
 ## Features
 
-*   **Multilingual Voice & Text Interface:** Supports regional languages and uses Google Cloud speech APIs and IndicTrans 2.0 for translation.
+*   **Multilingual Voice & Text Interface:** Supports regional languages and uses Google Cloud speech APIs and `translators` for translation.
 *   **Regulatory Guidance Module:** Provides summaries of fishery regulations, conservation species, prohibited areas, and gear specifications.
 *   **Safety Protocols Module:** Offers step-by-step life-jacket, distress, and first-aid procedures, as well as one-touch emergency workflows.
 *   **Environmental Alerts Module:** Delivers live weather, tide, and cyclone warnings with push notifications.
@@ -14,16 +14,18 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
 *   **Navigation & Route Guidance:** Provides voice-guided safe return routes without storm zones.
 *   **User Profile & Personalization:** Stores language, location, and history.
 *   **Daily Tips & Local News Feed:** Offers brief audio/text safety tips, local fisheries news, and a cultural fishing calendar.
+*   **Automatic Language Detection:** Automatically detects the language of the user's audio message.
+*   **Image Handling:** Holds uploaded images temporarily and allows users to send a follow-up message or audio query.
 
 ## Technology Stack
 
 *   **Frontend:** HTML5, CSS3, JavaScript
 *   **Backend:** Python 3.x, Flask
 *   **Database:** SQLite
-*   **NLP/AI:** OpenRouter (for chat), IndicTrans 2.0 (for translation)
-*   **Voice Services:** Google Cloud Text-to-Speech & Speech-to-Text
+*   **NLP/AI:** OpenRouter (for chat), `translators` (for translation)
+*   **Voice Services:** `speech_recognition`
 *   **Weather Data:** WeatherAPI
-*   **Fish Recognition:** Fishial API
+*   **Fish Recognition:** `ultralytics`
 *   **Navigation:** OpenRouteService API
 
 ## Setup and Installation
@@ -43,24 +45,19 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
         ```
     *   Initialize the database:
         ```bash
-        python database.py
+        python -c "from app import init_db; init_db()"
         ```
-    *   Populate the database with sample data:
-        ```bash
-        python populate_db.py
-        ```
-    *   **API Keys:** You will need to get API keys for the following services and add them to the `app.py` file:
-        *   OpenRouter
-        *   WeatherAPI
-        *   Fishial API
-        *   OpenRouteService
-        *   Google Cloud Platform (for Speech-to-Text and Text-to-Speech)
+    *   **API Keys:** You will need to get API keys for the following services and add them to a `.env` file in the `backend` directory:
+        *   `OPENROUTER_API_KEY`
+        *   `WEATHERSTACK_API_KEY`
+        *   `OPENCAGE_API_KEY`
+        *   `ORS_API_KEY`
     *   Run the Flask server:
         ```bash
         python app.py
         ```
 3.  **Set up the frontend:**
-    *   Open the `index.html` file in your browser.
+    *   Open the `index.html` file in the `frontend` directory in your browser.
 
 ## Usage
 
@@ -68,14 +65,14 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
 *   Type a message in the input box and press Enter or click the send button.
 *   Use the microphone button to speak to the chatbot.
 *   Use the theme switcher to toggle between light and dark mode.
+*   To get information about a fish, upload an image of the fish and then ask a question about it.
 *   You can also use the following endpoints to interact with the backend:
     *   `/chat`: Send a chat message.
-    *   `/translate`: Translate text.
     *   `/kb`: Manage the knowledge base.
     *   `/alerts`: Get the latest weather alerts.
-    *   `/recognize`: Recognize a fish species from an image.
+    *   `/recognize`: Upload an image of a fish.
+    *   `/image-chat`: Send a query about an uploaded image.
     *   `/navigate`: Get a safe route to the shore.
-    *   `/users`: Manage user profiles.
     *   `/speech-to-text`: Convert speech to text.
     *   `/text-to-speech`: Convert text to speech.
 
