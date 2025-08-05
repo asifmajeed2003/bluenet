@@ -521,7 +521,12 @@
                         voiceIcon.src = 'https://img.icons8.com/ios-glyphs/20/000000/speaker.png';
                         voiceIcon.style.cursor = 'pointer';
                         voiceIcon.style.marginLeft = '10px';
+                        let currentAudio;
                         voiceIcon.addEventListener('click', () => {
+                            if (currentAudio && !currentAudio.paused) {
+                                currentAudio.pause();
+                                return;
+                            }
                             fetch('http://127.0.0.1:5000/text-to-speech', {
                                 method: 'POST',
                                 headers: {
@@ -531,8 +536,8 @@
                             })
                                 .then(response => response.blob())
                                 .then(blob => {
-                                    const audio = new Audio(URL.createObjectURL(blob));
-                                    audio.play();
+                                    currentAudio = new Audio(URL.createObjectURL(blob));
+                                    currentAudio.play();
                                 });
                         });
                         messageElement.appendChild(voiceIcon);

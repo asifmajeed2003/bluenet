@@ -15,6 +15,7 @@ import io
 import sqlite3
 import speech_recognition as sr
 import translators as ts
+from elevenlabs import Voice, VoiceSettings, generate, play, set_api_key
 
 load_dotenv()
 
@@ -38,7 +39,7 @@ def chat():
 
     try:
         response = client.chat.completions.create(
-            model="deepseek/deepseek-r1",
+            model="mistralai/mistral-7b-instruct:free",
             messages=[
                 {
                     "role": "system",
@@ -132,18 +133,10 @@ def speech_to_text():
         return jsonify({"error": "No file selected"}), 400
     if file:
         try:
-            r = sr.Recognizer()
-            with sr.AudioFile(file) as source:
-                audio = r.record(source)
+            set_api_key(os.environ.get("ELEVENLABS_API_KEY"))
 
-            # Detect language
-            try:
-                detected_language = r.recognize_google(audio, show_all=True)['alternative'][0]['language']
-            except (sr.UnknownValueError, sr.RequestError, KeyError):
-                detected_language = 'en' # fallback to English
-
-            # Transcribe audio
-            transcript = r.recognize_google(audio, language=detected_language)
+            # Convert speech to text
+            transcript = elevenlabs.speech_to_text(file)
 
             # Translate to English
             translated_transcript = translate(transcript, to_language='en')
@@ -154,7 +147,7 @@ def speech_to_text():
                 api_key=os.environ.get("OPENROUTER_API_KEY"),
             )
             response = client.chat.completions.create(
-                model="deepseek/deepseek-r1",
+                model="mistralai/mistral-7b-instruct:free",
                 messages=[
                     {
                         "role": "system",
@@ -166,7 +159,7 @@ def speech_to_text():
             response_text = response.choices[0].message.content
 
             # Translate response back to original language
-            translated_response = translate(response_text, to_language=detected_language)
+            translated_response = translate(response_text, to_language=request.form.get('language', 'en'))
 
             return jsonify({"response": translated_response})
         except Exception as e:
@@ -179,11 +172,17 @@ def text_to_speech():
         return jsonify({"error": "No text provided"}), 400
 
     try:
-        tts = gTTS(text=text, lang='en')
-        mp3_fp = io.BytesIO()
-        tts.write_to_fp(mp3_fp)
-        mp3_fp.seek(0)
-        return mp3_fp.read(), 200, {'Content-Type': 'audio/mpeg'}
+        set_api_key(os.environ.get("ELEVENLABS_API_KEY"))
+
+        audio = generate(
+            text=text,
+            voice=Voice(
+                voice_id='21m00Tcm4TlvDq8ikWAM',
+                settings=VoiceSettings(stability=0.71, similarity_boost=0.5, style=0.0, use_speaker_boost=True)
+            )
+        )
+
+        return audio, 200, {'Content-Type': 'audio/mpeg'}
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -248,31 +247,8 @@ def image_chat():
         # Check if the file is an image
         if file.content_type.startswith('image/'):
             try:
-                # Save the file to a temporary directory
-                import tempfile
-                from ultralytics import YOLO
-
-                temp_dir = tempfile.gettempdir()
-                file_path = os.path.join(temp_dir, file.filename)
-                file.save(file_path)
-
-                # Load a pretrained YOLO11n model
-                model = YOLO("yolo11n.pt")
-
-                # Perform object detection on an image
-                results = model(file_path)
-
-                # Get the detected objects
-                detected_objects = []
-                for r in results:
-                    for c in r.boxes.cls:
-                        detected_objects.append(model.names[int(c)])
-
                 # Translate to English
                 translated_message = translate(message, to_language='en')
-
-                # Combine the message and the detected objects
-                combined_message = f"{translated_message} The user has uploaded an image with the following objects: {', '.join(detected_objects)}"
 
                 # Get response from chatbot
                 client = openai.OpenAI(
@@ -280,13 +256,19 @@ def image_chat():
                     api_key=os.environ.get("OPENROUTER_API_KEY"),
                 )
                 response = client.chat.completions.create(
-                    model="deepseek/deepseek-r1",
+                    model="meta-llama/llama-3.2-11b-vision-instruct:free",
                     messages=[
                         {
                             "role": "system",
                             "content": "You are Bluenet, a helpful assistant for Indian coastal fishing communities. You provide information on regulations, safety, and weather. You are friendly and speak in simple terms.",
                         },
-                        {"role": "user", "content": combined_message},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": translated_message},
+                                {"type": "image_url", "image_url": {"url": f"data:{file.content_type};base64,{file.read()}"}}
+                            ]
+                        },
                     ],
                 )
                 response_text = response.choices[0].message.content

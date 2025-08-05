@@ -4,7 +4,7 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
 
 ## Features
 
-*   **Multilingual Voice & Text Interface:** Supports regional languages and uses Google Cloud speech APIs and `translators` for translation.
+*   **Multilingual Voice & Text Interface:** Supports regional languages and uses ElevenLabs for speech-to-text and text-to-speech, and `translators` for translation.
 *   **Regulatory Guidance Module:** Provides summaries of fishery regulations, conservation species, prohibited areas, and gear specifications.
 *   **Safety Protocols Module:** Offers step-by-step life-jacket, distress, and first-aid procedures, as well as one-touch emergency workflows.
 *   **Environmental Alerts Module:** Delivers live weather, tide, and cyclone warnings with push notifications.
@@ -23,9 +23,9 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
 *   **Backend:** Python 3.x, Flask
 *   **Database:** SQLite
 *   **NLP/AI:** OpenRouter (for chat), `translators` (for translation)
-*   **Voice Services:** `speech_recognition`
+*   **Voice Services:** ElevenLabs
 *   **Weather Data:** WeatherAPI
-*   **Fish Recognition:** `ultralytics`
+*   **Fish Recognition:** OpenRouter
 *   **Navigation:** OpenRouteService API
 
 ## Setup and Installation
@@ -52,6 +52,7 @@ The Bluenet Chatbot is a light, multilingual voice-and-text assistant that provi
         *   `WEATHERSTACK_API_KEY`
         *   `OPENCAGE_API_KEY`
         *   `ORS_API_KEY`
+        *   `ELEVENLABS_API_KEY`
     *   Run the Flask server:
         ```bash
         python app.py
