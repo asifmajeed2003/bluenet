@@ -219,15 +219,15 @@
         }
 
         @keyframes glowing-red {
-            0% { text-shadow: 0 0 5px #ff0000, 0 0 10px #ff0000, 0 0 15px #ff0000, 0 0 20px #ff0000; }
-            50% { text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000, 0 0 30px #ff0000, 0 0 40px #ff0000; }
-            100% { text-shadow: 0 0 5px #ff0000, 0 0 10px #ff0000, 0 0 15px #ff0000, 0 0 20px #ff0000; }
+            0% { text-shadow: 0 0 2px #ff0000, 0 0 5px #ff0000; }
+            50% { text-shadow: 0 0 5px #ff0000, 0 0 10px #ff0000; }
+            100% { text-shadow: 0 0 2px #ff0000, 0 0 5px #ff0000; }
         }
 
         @keyframes glowing-green {
-            0% { text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00, 0 0 15px #00ff00, 0 0 20px #00ff00; }
-            50% { text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00, 0 0 30px #00ff00, 0 0 40px #00ff00; }
-            100% { text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00, 0 0 15px #00ff00, 0 0 20px #00ff00; }
+            0% { text-shadow: 0 0 2px #00ff00, 0 0 5px #00ff00; }
+            50% { text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00; }
+            100% { text-shadow: 0 0 2px #00ff00, 0 0 5px #00ff00; }
         }
     </style>
 </head>
@@ -354,7 +354,6 @@
             
             // --- Media Recorder State ---
             let mediaRecorder;
-            let audioChunks = [];
 
             // --- DOM Element Cache ---
             const DOMElements = {
@@ -519,7 +518,7 @@
                     if (sender === 'bot') {
                         messageElement.innerHTML = marked.parse(content);
                         const voiceIcon = document.createElement('img');
-                        voiceIcon.src = 'https://img.icons8.com/ios-glyphs/30/000000/speaker.png';
+                        voiceIcon.src = 'https://img.icons8.com/ios-glyphs/20/000000/speaker.png';
                         voiceIcon.style.cursor = 'pointer';
                         voiceIcon.style.marginLeft = '10px';
                         voiceIcon.addEventListener('click', () => {

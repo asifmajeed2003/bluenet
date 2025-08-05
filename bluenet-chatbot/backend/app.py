@@ -166,11 +166,12 @@ def speech_to_text():
             if not lang:
                 return jsonify({"error": "Could not detect language from audio"}), 500
 
-            # Load the model
+            # Download the model if it does not already exist
             model_path = f"vosk-model-small-{lang}-0.15"
             if not os.path.exists(model_path):
-                return jsonify({"error": f"Vosk model for language '{lang}' not found."}), 500
+                model = vosk.Model(lang=lang)
 
+            # Load the model
             model = vosk.Model(model_path)
 
             # Process the audio file
