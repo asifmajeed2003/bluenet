@@ -112,64 +112,49 @@ def recognize():
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     if file:
-        try:
-            # Save the file to a temporary directory
-            import tempfile
-            temp_dir = tempfile.gettempdir()
-            file_path = os.path.join(temp_dir, file.filename)
-            file.save(file_path)
+        # Check if the file is an image
+        if file.content_type.startswith('image/'):
+            try:
+                # Save the file to a temporary directory
+                import tempfile
+                temp_dir = tempfile.gettempdir()
+                file_path = os.path.join(temp_dir, file.filename)
+                file.save(file_path)
 
-            detector = ObjectDetection()
-            detector.setModelTypeAsYOLOv3()
-            detector.setModelPath(os.path.join(temp_dir , "yolov3.pt"))
-            detector.loadModel()
-            detections = detector.detectObjectsFromImage(input_image=file_path, output_image_path=os.path.join(temp_dir , "imagenew.jpg"), minimum_percentage_probability=30)
+                detector = ObjectDetection()
+                detector.setModelTypeAsYOLOv3()
+                detector.setModelPath(os.path.join(temp_dir , "yolov3.pt"))
+                detector.loadModel()
+                detections = detector.detectObjectsFromImage(input_image=file_path, output_image_path=os.path.join(temp_dir , "imagenew.jpg"), minimum_percentage_probability=30)
 
-            predictions = []
-            for eachObject in detections:
-                predictions.append({
-                    "box": eachObject["box_points"],
-                    "score": eachObject["percentage_probability"],
-                    "label": eachObject["name"]
-                })
+                predictions = []
+                for eachObject in detections:
+                    predictions.append({
+                        "box": eachObject["box_points"],
+                        "score": eachObject["percentage_probability"],
+                        "label": eachObject["name"]
+                    })
 
-            return jsonify({"predictions": predictions})
-        except Exception as e:
-            return jsonify({"error": f"An error occurred during speech recognition: {e}"}), 500
-
-def detect_audio_language(audio_file):
-    r = sr.Recognizer()
-    with sr.AudioFile(audio_file) as source:
-        audio = r.record(source)
-    try:
-        # Recognize speech using Google Speech Recognition
-        text = r.recognize_google(audio)
-        # Detect language from the recognized text
-        lang = detect(text)
-        return lang, text
-    except sr.UnknownValueError:
-        return None, None
-    except sr.RequestError:
-        return None, None
+                return jsonify({"predictions": predictions})
+            except Exception as e:
+                return jsonify({"error": f"An error occurred during image recognition: {e}"}), 500
+        else:
+            return jsonify({"error": "File is not an image"}), 400
 
 @app.route('/speech-to-text', methods=['POST'])
 def speech_to_text():
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400
     file = request.files['file']
+    language = request.form.get('language', 'en')
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     if file:
         try:
-            # Detect the language of the audio
-            lang, text = detect_audio_language(file)
-            if not lang:
-                return jsonify({"error": "Could not detect language from audio"}), 500
-
             # Download the model if it does not already exist
-            model_path = f"vosk-model-small-{lang}-0.15"
+            model_path = f"vosk-model-small-{language}-0.15"
             if not os.path.exists(model_path):
-                model = vosk.Model(lang=lang)
+                model = vosk.Model(lang=language)
 
             # Load the model
             model = vosk.Model(model_path)
@@ -190,7 +175,7 @@ def speech_to_text():
             result = json.loads(rec.FinalResult())
             transcript = result['text']
 
-            return jsonify({"transcript": transcript, "language": lang})
+            return jsonify({"transcript": transcript, "language": language})
         except Exception as e:
             return jsonify({"error": f"An error occurred during speech-to-text: {e}"}), 500
 

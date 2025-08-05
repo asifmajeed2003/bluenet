@@ -571,6 +571,7 @@
 
                 const formData = new FormData();
                 formData.append('file', audioBlob, 'audio.wav');
+                formData.append('language', appState.currentLanguage);
                 if (appState.uploadedImage) {
                     formData.append('image', appState.uploadedImage, appState.uploadedImage.name);
                     appState.uploadedImage = null;
@@ -765,12 +766,12 @@
 
             DOMElements.navigateBtn = document.getElementById('navigate-btn');
             DOMElements.navigateBtn.addEventListener('click', () => {
-                setReadyStatus(false);
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(position => {
-                        const startCoords = [position.coords.longitude, position.coords.latitude];
-                        const destination = prompt("Enter your destination:");
-                        if (destination) {
+                const destination = DOMElements.userInput.value.trim();
+                if (destination) {
+                    setReadyStatus(false);
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(position => {
+                            const startCoords = [position.coords.longitude, position.coords.latitude];
                             fetch('http://127.0.0.1:5000/navigate', {
                                 method: 'POST',
                                 headers: {
@@ -794,19 +795,19 @@
                                     appendChatMessage('bot', 'Could not get navigation route.');
                                 })
                                 .finally(() => setReadyStatus(true));
-                        } else {
-                            setReadyStatus(true);
-                        }
-                    });
+                        });
+                    } else {
+                        appendChatMessage('bot', 'Geolocation is not supported by this browser.');
+                        setReadyStatus(true);
+                    }
                 } else {
-                    appendChatMessage('bot', 'Geolocation is not supported by this browser.');
-                    setReadyStatus(true);
+                    appendChatMessage('bot', 'Please enter a destination in the input field.');
                 }
             });
 
             DOMElements.kbBtn = document.getElementById('kb-btn');
             DOMElements.kbBtn.addEventListener('click', () => {
-                const query = prompt("Enter a search query for the knowledge base:");
+                const query = DOMElements.userInput.value.trim();
                 if (query) {
                     fetch(`http://127.0.0.1:5000/kb?q=${query}`)
                         .then(response => response.json())
@@ -829,6 +830,8 @@
                             console.error('Error:', error);
                             appendChatMessage('bot', 'Could not search the knowledge base.');
                         });
+                } else {
+                    appendChatMessage('bot', 'Please enter a search query in the input field.');
                 }
             });
 
