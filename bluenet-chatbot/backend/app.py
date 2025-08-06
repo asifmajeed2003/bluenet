@@ -133,6 +133,8 @@ def speech_to_text():
         return jsonify({"error": "No file selected"}), 400
     if file:
         try:
+            if not os.environ.get("ELEVENLABS_API_KEY"):
+                return jsonify({"error": "ElevenLabs API key not found."}), 500
             set_api_key(os.environ.get("ELEVENLABS_API_KEY"))
 
             # Convert speech to text
@@ -172,6 +174,8 @@ def text_to_speech():
         return jsonify({"error": "No text provided"}), 400
 
     try:
+        if not os.environ.get("ELEVENLABS_API_KEY"):
+            return jsonify({"error": "ElevenLabs API key not found."}), 500
         set_api_key(os.environ.get("ELEVENLABS_API_KEY"))
 
         audio = generate(
