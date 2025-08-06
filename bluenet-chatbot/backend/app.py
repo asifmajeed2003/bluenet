@@ -4,7 +4,7 @@ import openai
 from dotenv import load_dotenv
 import requests
 import openrouteservice
-from imageai.Detection import ObjectDetection
+# from imageai.Detection import ObjectDetection
 import os
 from opencage.geocoder import OpenCageGeocode
 import vosk
@@ -16,7 +16,8 @@ import sqlite3
 import speech_recognition as sr
 import translators as ts
 
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 app = Flask(__name__)
 CORS(app)
