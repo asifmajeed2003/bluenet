@@ -1,10 +1,9 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
-from dotenv import load_dotenv
 import requests
 import openrouteservice
-from imageai.Detection import ObjectDetection
+# from imageai.Detection import ObjectDetection
 import os
 from opencage.geocoder import OpenCageGeocode
 import vosk
@@ -15,8 +14,7 @@ import io
 import sqlite3
 import speech_recognition as sr
 import translators as ts
-
-load_dotenv()
+import config
 
 app = Flask(__name__)
 CORS(app)
@@ -33,7 +31,7 @@ def chat():
 
     client = openai.OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=os.environ.get("OPENROUTER_API_KEY"),
+        api_key=config.OPENROUTER_API_KEY,
     )
 
     try:
@@ -56,7 +54,7 @@ def chat():
 @app.route('/alerts', methods=['GET'])
 def alerts():
     location = request.args.get('location', 'Chennai')  # Default location is Chennai
-    api_key = os.environ.get("WEATHERSTACK_API_KEY")
+    api_key = config.WEATHERSTACK_API_KEY
     url = f"http://api.weatherstack.com/current?access_key={api_key}&query={location}"
 
     try:
@@ -80,7 +78,7 @@ def navigate():
     if not start_coords or not destination:
         return jsonify({"error": "Start coordinates and destination are required"}), 400
 
-    geocoder = OpenCageGeocode(os.environ.get("OPENCAGE_API_KEY"))
+    geocoder = OpenCageGeocode(config.OPENCAGE_API_KEY)
     results = geocoder.geocode(destination)
 
     if not results or len(results) == 0:
@@ -88,7 +86,7 @@ def navigate():
 
     end_coords = [results[0]['geometry']['lng'], results[0]['geometry']['lat']]
 
-    client = openrouteservice.Client(key=os.environ.get("ORS_API_KEY"))
+    client = openrouteservice.Client(key=config.ORS_API_KEY)
 
     try:
         routes = client.directions(
@@ -151,7 +149,7 @@ def speech_to_text():
             # Get response from chatbot
             client = openai.OpenAI(
                 base_url="https://openrouter.ai/api/v1",
-                api_key=os.environ.get("OPENROUTER_API_KEY"),
+                api_key=config.OPENROUTER_API_KEY,
             )
             response = client.chat.completions.create(
                 model="deepseek/deepseek-r1",
@@ -277,7 +275,7 @@ def image_chat():
                 # Get response from chatbot
                 client = openai.OpenAI(
                     base_url="https://openrouter.ai/api/v1",
-                    api_key=os.environ.get("OPENROUTER_API_KEY"),
+                    api_key=config.OPENROUTER_API_KEY,
                 )
                 response = client.chat.completions.create(
                     model="deepseek/deepseek-r1",
